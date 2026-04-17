@@ -143,10 +143,17 @@ def click_first_detail():
     time.sleep(PAGE_LOAD_WAIT)
 
 
-def click_iklan_shopee():
+def get_seller_domain(akun):
+    if akun.startswith("TH."):
+        return "seller.shopee.co.th"
+    return "seller.shopee.co.id"
+
+
+def click_iklan_shopee(akun):
+    domain = get_seller_domain(akun)
     pyautogui.hotkey("command", "l")
     time.sleep(0.5)
-    pyautogui.typewrite("https://seller.shopee.co.id/portal/marketing/pas/index", interval=0.01)
+    pyautogui.typewrite(f"https://{domain}/portal/marketing/pas/index", interval=0.01)
     time.sleep(0.3)
     pyautogui.press("enter")
     time.sleep(PAGE_LOAD_WAIT + 2)
@@ -210,16 +217,12 @@ def scroll_to_performa():
     time.sleep(2)
 
 
-def go_back_to_pilih_toko():
-    pyautogui.hotkey("command", "Home")
+def go_back_to_pilih_toko(akun=None):
+    pyautogui.hotkey("command", "l")
     time.sleep(0.5)
-    pyautogui.keyDown("command")
-    pyautogui.press("up")
-    pyautogui.keyUp("command")
-    time.sleep(0.5)
-    pyautogui.click(*ACCOUNT_BUTTON)
-    time.sleep(CLICK_DELAY)
-    pyautogui.click(*GANTI_TOKO)
+    pyautogui.typewrite("https://seller.shopee.co.id/portal/shop", interval=0.01)
+    time.sleep(0.3)
+    pyautogui.press("enter")
     time.sleep(PAGE_LOAD_WAIT)
 
 
@@ -244,16 +247,16 @@ def process_brand(akun):
     print("  3. Clicking Detail...")
     click_first_detail()
 
-    print("  4. Clicking Iklan Shopee in sidebar...")
-    click_iklan_shopee()
+    print("  4. Navigating to Iklan Shopee...")
+    click_iklan_shopee(akun)
 
     print("  5. Closing popup...")
     close_popup()
 
-    print("  6. Scrolling to Performa section...")
+    print("  7. Scrolling to Performa section...")
     scroll_to_performa()
 
-    print("  7. Setting chart metrics (need: only Pesanan + ROAS)...")
+    print("  8. Setting chart metrics (need: only Biaya Iklan + ROAS)...")
     for name, pos in METRIC_CARDS.items():
         selected = is_card_selected(pos)
         should_be = name in DESIRED_SELECTED

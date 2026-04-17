@@ -103,16 +103,17 @@ def add_brand_slide(slides_service, drive_service, brand_akun, screenshots):
     print(f"  Uploading screenshots to Drive...")
     img_urls = [upload_image_to_drive(drive_service, s) for s in screenshots]
 
-    labels = ["ROAS 1 Bulan Terakhir", "ROAS 3 Bulan Terakhir"]
+    labels = ["SHO ROAS 1 Bulan Terakhir", "SHO ROAS 3 Bulan Terakhir"]
 
+    safe_name = brand_akun.replace(".", "_")
     for idx, (url, label) in enumerate(zip(img_urls, labels)):
         rand = os.urandom(4).hex()
-        new_slide_id = f"slide_{brand_akun}_{idx}_{rand}"
-        new_title_id = f"title_{brand_akun}_{idx}_{rand}"
-        new_subtitle_id = f"sub_{brand_akun}_{idx}_{rand}"
-        new_logo_id = f"logo_{brand_akun}_{idx}_{rand}"
-        new_rect_id = f"rect_{brand_akun}_{idx}_{rand}"
-        img_id = f"img_{brand_akun}_{idx}_{rand}"
+        new_slide_id = f"slide_{safe_name}_{idx}_{rand}"
+        new_title_id = f"title_{safe_name}_{idx}_{rand}"
+        new_subtitle_id = f"sub_{safe_name}_{idx}_{rand}"
+        new_logo_id = f"logo_{safe_name}_{idx}_{rand}"
+        new_rect_id = f"rect_{safe_name}_{idx}_{rand}"
+        img_id = f"img_{safe_name}_{idx}_{rand}"
 
         dup_requests = [{
             "duplicateObject": {
@@ -249,7 +250,8 @@ def replace_meeting_screenshots(slides_service, drive_service, brand_akun, scree
 
         slide_id, old_img_id = brand_data[key]
         img_url = upload_image_to_drive(drive_service, img_path)
-        new_img_id = f"meeting_img_{brand_akun}_{key}_{os.urandom(4).hex()}"
+        safe_name = brand_akun.replace(".", "_")
+        new_img_id = f"meeting_img_{safe_name}_{key}_{os.urandom(4).hex()}"
 
         # Get old image position/size to match
         pres = slides_service.presentations().get(presentationId=MEETING_SLIDES_ID).execute()
