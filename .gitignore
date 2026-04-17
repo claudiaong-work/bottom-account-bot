@@ -3,3 +3,8 @@ screenshots/
 ref_images/debug_*
 screen_capture.png
 *.pyc
+credentials.json
+token.pickle
+token_gmail.pickle
+service_account.json
+fbi-dev-*.json

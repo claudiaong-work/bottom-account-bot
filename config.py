@@ -1,7 +1,11 @@
 SELLER_CENTER_URL = "https://seller.shopee.co.id"
 SLIDES_ID = "1Ott0JcNme2979Obe4VpJNQey7Pyr6mP5YNGeK2XiFC4"
+MEETING_SLIDES_ID = "12BCe2jvkoG1z01il6bBQRHkW3Z2aOSMUAIKG8JzqFuM"
 
 SCREENSHOT_DIR = "screenshots"
+
+# Email notification
+EMAIL_RECIPIENTS = ["tfbi@ahacommerce.net", "claudia.ong@ahacommerce.net"]
 
 # Timing configs (seconds) - adjust if Shopee is slow
 PAGE_LOAD_WAIT = 3

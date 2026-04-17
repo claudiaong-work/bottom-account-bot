@@ -28,17 +28,37 @@ FIRST_DETAIL_LINK = (1225, 540)
 IKLAN_SHOPEE_MENU = (80, 739)
 
 # Iklan Shopee page (positions after scrolling down)
-DATE_FILTER_DROPDOWN = (1105, 328)
-FILTER_1BULAN = (667, 464)
-FILTER_3BULAN = (670, 494)
+DATE_FILTER_DROPDOWN = (1083, 501)
+FILTER_1BULAN = (641, 636)
+FILTER_3BULAN = (649, 673)
+
+# Metric cards (4 per row, evenly spaced)
+# Row 1 (y=564): Iklan Dilihat, Produk Terjual, Jumlah Klik, Penjualan dari Iklan
+# Row 2 (y=666): Persentase Klik, Biaya Iklan, Pesanan, ROAS
+METRIC_CARDS = {
+    "Iklan Dilihat":        (442, 564),
+    "Produk Terjual":       (789, 564),
+    "Jumlah Klik":          (1135, 564),
+    "Penjualan dari Iklan": (1482, 564),
+    "Persentase Klik":      (442, 666),
+    "Biaya Iklan":          (789, 666),
+    "Pesanan":              (1135, 666),
+    "ROAS":                 (1482, 666),
+}
+DESIRED_SELECTED = {"Biaya Iklan", "ROAS"}
+
 
 # Search filter dropdown
 NAMA_TOKO_DROPDOWN = (397, 322)
 USERNAME_TOKO_OPTION = (418, 400)
 
+# Screenshot crop region (pyautogui coords)
+CROP_TOP_LEFT = (206, 412)
+CROP_BOTTOM_RIGHT = (1630, 1006)
+
 # Top-right account menu
 ACCOUNT_BUTTON = (1645, 199)
-GANTI_TOKO = (1509, 485)
+GANTI_TOKO = (1486, 547)
 
 # --- Brand list ---
 BRANDS = {}
@@ -46,6 +66,29 @@ with open(os.path.join(os.path.dirname(__file__), "brands.csv")) as f:
     reader = csv.DictReader(f)
     for row in reader:
         BRANDS[row["akun"]] = row["shopee_username"]
+
+
+def is_card_selected(card_pos):
+    """Check if a metric card is selected by scanning for a colored top border.
+    Samples pixels in a strip above the card center (y-35 to y-25)."""
+    tmp_path = os.path.join(SCREENSHOT_DIR, "_tmp_detect.png")
+    subprocess.run(["screencapture", "-x", tmp_path])
+    from PIL import Image
+    img = Image.open(tmp_path)
+    cx, cy = card_pos
+    colored_count = 0
+    for dy in range(-35, -24):
+        for dx in range(-40, 41, 10):
+            px_x = (cx + dx) * 2
+            px_y = (cy + dy) * 2
+            r, g, b = img.getpixel((px_x, px_y))[:3]
+            max_c = max(r, g, b)
+            min_c = min(r, g, b)
+            saturation = (max_c - min_c) / max_c if max_c > 0 else 0
+            if saturation > 0.3 and max_c > 100:
+                colored_count += 1
+    os.remove(tmp_path)
+    return colored_count >= 3
 
 
 def notify(message):
@@ -60,7 +103,19 @@ def take_screenshot(brand_akun, filter_name):
     filename = f"{brand_akun}_{filter_name}_{timestamp}.png"
     filepath = os.path.join(SCREENSHOT_DIR, filename)
     time.sleep(1.5)
-    subprocess.run(["screencapture", "-x", filepath])
+    # Take full screenshot then crop to Performa section
+    tmp_path = os.path.join(SCREENSHOT_DIR, "_tmp_full.png")
+    subprocess.run(["screencapture", "-x", tmp_path])
+    from PIL import Image
+    img = Image.open(tmp_path)
+    # Retina 2x: multiply pyautogui coords by 2
+    x1 = CROP_TOP_LEFT[0] * 2
+    y1 = CROP_TOP_LEFT[1] * 2
+    x2 = CROP_BOTTOM_RIGHT[0] * 2
+    y2 = CROP_BOTTOM_RIGHT[1] * 2
+    cropped = img.crop((x1, y1, x2, y2))
+    cropped.save(filepath)
+    os.remove(tmp_path)
     print(f"  Saved: {filepath}")
     return filepath
 
@@ -89,25 +144,61 @@ def click_first_detail():
 
 
 def click_iklan_shopee():
-    pyautogui.click(*IKLAN_SHOPEE_MENU)
-    time.sleep(PAGE_LOAD_WAIT)
+    pyautogui.hotkey("command", "l")
+    time.sleep(0.5)
+    pyautogui.typewrite("https://seller.shopee.co.id/portal/marketing/pas/index", interval=0.01)
+    time.sleep(0.3)
+    pyautogui.press("enter")
+    time.sleep(PAGE_LOAD_WAIT + 2)
+
+
+def is_popup_present():
+    """Check if a dimmed overlay (popup backdrop) is visible."""
+    tmp_path = os.path.join(SCREENSHOT_DIR, "_tmp_popup.png")
+    subprocess.run(["screencapture", "-x", tmp_path])
+    from PIL import Image
+    img = Image.open(tmp_path)
+    sample_points = [(400, 900), (1400, 900), (400, 300)]
+    dim_count = 0
+    for x, y in sample_points:
+        r, g, b = img.getpixel((x * 2, y * 2))[:3]
+        if r < 80 and g < 80 and b < 80:
+            dim_count += 1
+    os.remove(tmp_path)
+    return dim_count >= 2
 
 
 def close_popup():
     time.sleep(POPUP_WAIT)
-    # Try pressing Escape to close any popup
+    if not is_popup_present():
+        print("    No popup detected, continuing...")
+        return
     pyautogui.press("escape")
     time.sleep(CLICK_DELAY)
+    if not is_popup_present():
+        print("    Popup closed with Escape")
+        return
+    pyautogui.press("escape")
+    time.sleep(CLICK_DELAY)
+    if not is_popup_present():
+        print("    Popup closed with second Escape")
+        return
+    subprocess.run([
+        "osascript", "-e",
+        'display dialog "Popup still open — please close it, then click OK." with title "Shopee Ads Bot" buttons {"OK"} default button "OK" with icon caution'
+    ])
 
 
 def select_date_filter(filter_name):
+    pyautogui.moveTo(855, 400)
+    time.sleep(0.5)
     pyautogui.click(*DATE_FILTER_DROPDOWN)
-    time.sleep(CLICK_DELAY)
+    time.sleep(2)
     if filter_name == "1bulan":
         pyautogui.click(*FILTER_1BULAN)
     else:
         pyautogui.click(*FILTER_3BULAN)
-    time.sleep(PAGE_LOAD_WAIT)
+    time.sleep(PAGE_LOAD_WAIT + 2)
 
 
 def scroll_to_performa():
@@ -116,10 +207,16 @@ def scroll_to_performa():
     pyautogui.scroll(-7)
     time.sleep(SCROLL_DELAY)
     pyautogui.scroll(-8)
-    time.sleep(SCROLL_DELAY)
+    time.sleep(2)
 
 
 def go_back_to_pilih_toko():
+    pyautogui.hotkey("command", "Home")
+    time.sleep(0.5)
+    pyautogui.keyDown("command")
+    pyautogui.press("up")
+    pyautogui.keyUp("command")
+    time.sleep(0.5)
     pyautogui.click(*ACCOUNT_BUTTON)
     time.sleep(CLICK_DELAY)
     pyautogui.click(*GANTI_TOKO)
@@ -153,11 +250,28 @@ def process_brand(akun):
     print("  5. Closing popup...")
     close_popup()
 
-    print("  6. Scrolling to Performa...")
+    print("  6. Scrolling to Performa section...")
     scroll_to_performa()
+
+    print("  7. Setting chart metrics (need: only Pesanan + ROAS)...")
+    for name, pos in METRIC_CARDS.items():
+        selected = is_card_selected(pos)
+        should_be = name in DESIRED_SELECTED
+        if selected and not should_be:
+            print(f"    {name} is ON → clicking to deselect")
+            pyautogui.click(*pos)
+            time.sleep(1)
+        elif not selected and should_be:
+            print(f"    {name} is OFF → clicking to select")
+            pyautogui.click(*pos)
+            time.sleep(1)
+        else:
+            status = "ON" if selected else "OFF"
+            print(f"    {name} {status} → OK")
 
     for filter_name in ["1bulan", "3bulan"]:
         label = "1 bulan" if filter_name == "1bulan" else "3 bulan"
+
         print(f"  7. Selecting '{label}' filter...")
         select_date_filter(filter_name)
 
@@ -201,18 +315,21 @@ def calibrate():
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage:")
-        print("  python3 shopee_ads_screenshot.py BRAND1 BRAND2 ...")
-        print("  python3 shopee_ads_screenshot.py --calibrate")
-        print(f"\nAvailable brands: {', '.join(sorted(BRANDS.keys()))}")
-        sys.exit(1)
-
-    if sys.argv[1] == "--calibrate":
+    if len(sys.argv) >= 2 and sys.argv[1] == "--calibrate":
         calibrate()
         return
 
-    brand_list = [b.strip().upper() for b in sys.argv[1:]]
+    if len(sys.argv) >= 2:
+        brand_list = [b.strip().upper() for b in sys.argv[1:]]
+    else:
+        from read_brands_from_sheet import fetch_bottom_brands
+        print("No brands specified — fetching from Google Sheet...")
+        brand_list = fetch_bottom_brands()
+        brand_list = [b for b in brand_list if b in BRANDS]
+        if not brand_list:
+            print("No brands found in sheet (or none matched brands.csv).")
+            sys.exit(1)
+        print(f"Found {len(brand_list)} brands: {', '.join(brand_list)}")
 
     invalid = [b for b in brand_list if b not in BRANDS]
     if invalid:
