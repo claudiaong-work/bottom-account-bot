@@ -87,7 +87,7 @@ Brand names with dots (e.g., `TH.KSB-M`) are sanitized to underscores in Slides 
 
 - **Recipients:** `tfbi@ahacommerce.net`, `claudia.ong@ahacommerce.net`
 - **Login reminder:** sent before bot runs, includes brand list from Google Sheet
-- **Success report:** sent after bot finishes, lists completed/failed brands
+- **Success report:** sent after the FULL run finishes (screenshots + Slides insertion). Must list, per brand, whether the screenshot was captured and whether it was inserted into both decks. Surface any failures explicitly so the user knows which brands to redo manually.
 - **Auth:** Gmail API via `token_gmail.pickle` (separate from Slides OAuth), uses `gmail.send` scope
 - **Sender:** `claudia.ong@ahacommerce.net` (via OAuth)
 
