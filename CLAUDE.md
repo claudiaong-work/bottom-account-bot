@@ -16,6 +16,10 @@ Weekly Thursday automation: screenshot Shopee ads performance for underperformin
 - `brands.csv` — Maps brand `akun` → `shopee_username`. Source of truth for brand lookups.
 - `capture_ref_images.py` / `ref_images/` — Reference images for visual debugging / calibration aids.
 - `mouse_tracker.py` — Helper to print live mouse position while calibrating.
+- `_calibrate_helper.py` — Navigates to a brand's Iklan Shopee page, scrolls to Performa, then runs `calibrate_cards()` (used when the page must be set up before card calibration).
+- `_calibrate_crop_helper.py` — Same as above but runs `calibrate_crop()` to re-record the screenshot crop region.
+- `_calibrate_date.py` — Standalone date-filter calibration (assumes Iklan Shopee page already in view).
+- `_manual_capture.py` — Manual screenshot fallback: dialogs prompt the user to set up the page (correct metrics + filter), bot just screencaptures with the calibrated crop. Use when auto-detect can't recover.
 - `credentials.json` / `token.pickle` — Google OAuth for Slides/Drive (gitignored).
 - `token_gmail.pickle` — Google OAuth for Gmail send (gitignored).
 - `service_account.json` — Service account key for Sheets read (gitignored).
@@ -42,9 +46,10 @@ User must navigate to Pilih Toko page manually before starting the bot. The bot 
    - Thai brands (`TH.*`): `https://seller.shopee.co.th/portal/marketing/pas/index`
 4. Popup handling: checks if dimmed overlay present → tries Escape (twice if needed) → only shows macOS dialog if popup persists. No notification if no popup.
 5. Scroll down to "Performa Seluruh Iklan".
-6. Smart metric card detection: scans all 8 metric cards for colored top border (selected state). Deselects everything except **Biaya Iklan + ROAS**. Only clicks cards that need toggling.
-7. For each of `1 bulan terakhir` and `3 bulan terakhir`: open date filter, pick option, screencapture, crop to the Performa region, save.
-8. Go back to Pilih Toko via Cmd+L + `https://seller.shopee.co.id/portal/shop` (always `.co.id`, even for Thai brands).
+6. **Auto-detect y-offset**: scans for the top of row 1 cards (first long run of white pixels at the Iklan Dilihat column) and computes offset from calibrated `EXPECTED_CARD_TOP_Y`. The offset is then added to all card click positions, date filter clicks, and the screenshot crop region — handles brands where the page has less content above (e.g. ALUN-M, TH.KSB-M) so a fixed scroll lands the Performa section higher than calibrated.
+7. Smart metric card detection: scans all 8 metric cards for colored top border (selected state). Deselects everything except **Biaya Iklan + ROAS**. Only clicks cards that need toggling.
+8. For each of `1 bulan terakhir` and `3 bulan terakhir`: open date filter, pick option, screencapture, crop to the Performa region (offset-adjusted), save.
+9. Go back to Pilih Toko via Cmd+L + `https://seller.shopee.co.id/portal/shop` (always `.co.id`, even for Thai brands).
 
 ## Domain handling
 
@@ -93,15 +98,24 @@ Brand names with dots (e.g., `TH.KSB-M`) are sanitized to underscores in Slides 
 
 ## Coordinates
 
-All click targets are hardcoded at the top of `shopee_ads_screenshot.py` and assume a 1710x1112 logical viewport. If the browser window size, zoom, or Shopee's layout changes, run `--calibrate` to re-record them. Screenshot crop uses `CROP_TOP_LEFT` and `CROP_BOTTOM_RIGHT` multiplied by 2 for Retina.
+All click targets are hardcoded at the top of `shopee_ads_screenshot.py` and assume a 1710x1112 logical viewport. If the browser window size, zoom, or Shopee's layout changes, run the relevant `--calibrate*` flag to re-record them. Screenshot crop uses `CROP_TOP_LEFT` and `CROP_BOTTOM_RIGHT` multiplied by 2 for Retina.
+
+Calibration flags (`--calibrate`, `--calibrate-cards`, `--calibrate-crop`) use **osascript dialogs** with a 5s hover delay (no `input()` since the script runs without a TTY). For card and crop calibration, the helpers `_calibrate_helper.py` / `_calibrate_crop_helper.py` first navigate to a brand's Iklan Shopee page and scroll, so the page is set up before dialogs prompt for hovers.
 
 ## Metric card positions
 
-8 cards in 2 rows (y=564, y=666), 4 per row (x=442, 789, 1135, 1482):
-- Row 1: Iklan Dilihat, Produk Terjual, Jumlah Klik, Penjualan dari Iklan
-- Row 2: Persentase Klik, Biaya Iklan, Pesanan, ROAS
+8 cards in 2 rows, 4 per row. **Shopee reordered the cards in 2026-04** — current layout (top row first):
 
-Detection: scans a strip of pixels above the card center (y-35 to y-25) for colored top border. Colored = selected.
+- Row 1 (~y=571): Iklan Dilihat, Jumlah Klik, Persentase Klik, Pesanan
+- Row 2 (~y=649): Produk Terjual, Penjualan dari Iklan, Biaya Iklan, ROAS
+
+Detection: scans a strip of pixels above the card center (y-70 to y-5) for colored top border. Colored = selected.
+
+## Auto-detect y-offset
+
+`detect_y_offset()` is called after `scroll_to_performa()` in each brand's flow. It screencaptures, then scans a vertical line at the Iklan Dilihat column (logical x=459) starting at screen y=600 looking for the first run of white pixels ≥100 screen px (≈50 logical) — that's the top edge of row 1 cards. Offset = `actual_top - EXPECTED_CARD_TOP_Y` (= 536). The offset is threaded into `is_card_selected` (via pre-adjusted card positions), `select_date_filter`, and `take_screenshot` so all clicks/screenshots track the actual layout per brand.
+
+Why it's needed: brands like ALUN-M and TH.KSB-M have less promo/banner content above the Performa section, so the fixed `pyautogui.scroll(-7, -8, -3)` lands the cards ~80–100 logical px higher than for brands with full banners. Without the offset, the bot would click row-1 coords and hit row-2 cards (or vice versa) and the crop would clip the cards while leaking "Semua Daftar Iklan" at the bottom.
 
 ## Gotchas
 
@@ -111,3 +125,5 @@ Detection: scans a strip of pixels above the card center (y-35 to y-25) for colo
 - All navigation uses Cmd+L + URL (sidebar clicks and "Ganti toko" dropdown were unreliable).
 - Script runs non-interactively (no stdin) — use `osascript display dialog` for user prompts, not `input()`.
 - Brand names with dots break Slides object IDs — sanitize to underscores.
+- `click_iklan_shopee` waits `PAGE_LOAD_WAIT + 7` (= ~10s) after navigating — Shopee's Iklan page can be slow and a too-short wait causes the bot to scroll/click before the page is ready (e.g. landing on the "Iklan Live" tab).
+- The bot's fixed-tick scroll (`scroll_to_performa`) lands at different positions across brands. The auto-detect y-offset compensates; don't assume row-1 cards are always at calibrated y.
