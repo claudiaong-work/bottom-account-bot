@@ -19,46 +19,87 @@ from config import (
 pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.3
 
-# --- Coordinate map (pyautogui coords for 1710x1112 screen) ---
-# Pilih Toko page
-SEARCH_BOX = (511, 336)
-FIRST_DETAIL_LINK = (1225, 540)
+# --- Machine detection ---
+# MacBook Retina: 1710x1112 logical (2560x1664 physical, screencapture returns 2x)
+# Mac Mini 1080p: 1920x1080 (no scaling)
+_screen_w, _screen_h = pyautogui.size()
+IS_MAC_MINI = _screen_w == 1920
 
-# Shop dashboard - sidebar
-IKLAN_SHOPEE_MENU = (80, 739)
+if IS_MAC_MINI:
+    SCREEN_SCALE = 1
+    SEARCH_BOX = (649, 320)
+    FIRST_DETAIL_LINK = (1315, 528)
+    IKLAN_SHOPEE_MENU = (67, 733)
+    DATE_FILTER_DROPDOWN = (1340, 432)
+    FILTER_1BULAN = (862, 576)
+    FILTER_3BULAN = (851, 610)
+    METRIC_CARDS = {
+        "Iklan Dilihat":        (437, 505),
+        "Jumlah Klik":          (781, 515),
+        "Persentase Klik":      (1172, 520),
+        "Pesanan":              (1548, 512),
+        "Produk Terjual":       (425, 615),
+        "Penjualan dari Iklan": (823, 616),
+        "Biaya Iklan":          (1161, 609),
+        "ROAS":                 (1559, 604),
+    }
+    NAMA_TOKO_DROPDOWN = (499, 313)
+    USERNAME_TOKO_OPTION = (503, 390)
+    CROP_TOP_LEFT = (204, 406)
+    CROP_BOTTOM_RIGHT = (1820, 950)
+    ACCOUNT_BUTTON = (1780, 176)
+    GANTI_TOKO = (1698, 476)
+else:
+    SCREEN_SCALE = 2
+    SEARCH_BOX = (511, 336)
+    FIRST_DETAIL_LINK = (1225, 540)
+    IKLAN_SHOPEE_MENU = (80, 739)
+    DATE_FILTER_DROPDOWN = (1108, 479)
+    FILTER_1BULAN = (627, 628)
+    FILTER_3BULAN = (663, 662)
+    METRIC_CARDS = {
+        "Iklan Dilihat":        (459, 571),
+        "Produk Terjual":       (473, 649),
+        "Jumlah Klik":          (813, 552),
+        "Penjualan dari Iklan": (798, 667),
+        "Persentase Klik":      (1059, 568),
+        "Biaya Iklan":          (1108, 656),
+        "Pesanan":              (1395, 559),
+        "ROAS":                 (1403, 664),
+    }
+    NAMA_TOKO_DROPDOWN = (397, 322)
+    USERNAME_TOKO_OPTION = (418, 400)
+    CROP_TOP_LEFT = (205, 458)
+    CROP_BOTTOM_RIGHT = (1621, 1000)
+    ACCOUNT_BUTTON = (1645, 199)
+    GANTI_TOKO = (1486, 547)
 
-# Iklan Shopee page (positions after scrolling down)
-DATE_FILTER_DROPDOWN = (1108, 479)
-FILTER_1BULAN = (627, 628)
-FILTER_3BULAN = (663, 662)
-
-# Metric cards (4 per row, evenly spaced)
-# Row 1 (y=564): Iklan Dilihat, Produk Terjual, Jumlah Klik, Penjualan dari Iklan
-# Row 2 (y=666): Persentase Klik, Biaya Iklan, Pesanan, ROAS
-METRIC_CARDS = {
-    "Iklan Dilihat":        (459, 571),
-    "Produk Terjual":       (473, 649),
-    "Jumlah Klik":          (813, 552),
-    "Penjualan dari Iklan": (798, 667),
-    "Persentase Klik":      (1059, 568),
-    "Biaya Iklan":          (1108, 656),
-    "Pesanan":              (1395, 559),
-    "ROAS":                 (1403, 664),
-}
 DESIRED_SELECTED = {"Biaya Iklan", "ROAS"}
 
-
-# Search filter dropdown
-NAMA_TOKO_DROPDOWN = (397, 322)
-USERNAME_TOKO_OPTION = (418, 400)
-
-# Screenshot crop region (pyautogui coords)
-CROP_TOP_LEFT = (205, 458)
-CROP_BOTTOM_RIGHT = (1621, 1000)
-
-# Top-right account menu
-ACCOUNT_BUTTON = (1645, 199)
-GANTI_TOKO = (1486, 547)
+# TH brand overrides (Iklan Shopee page on .co.th has slightly different layout after scroll)
+if IS_MAC_MINI:
+    TH_METRIC_CARDS = {
+        "Iklan Dilihat":        (396, 426),
+        "Jumlah Klik":          (748, 424),
+        "Persentase Klik":      (1206, 427),
+        "Pesanan":              (1581, 418),
+        "Produk Terjual":       (406, 516),
+        "Penjualan dari Iklan": (816, 515),
+        "Biaya Iklan":          (1192, 509),
+        "ROAS":                 (1572, 520),
+    }
+    TH_DATE_FILTER_DROPDOWN = (1293, 343)
+    TH_FILTER_1BULAN = (823, 484)
+    TH_FILTER_3BULAN = (808, 517)
+    TH_CROP_TOP_LEFT = (204, 316)
+    TH_CROP_BOTTOM_RIGHT = (1821, 868)
+else:
+    TH_METRIC_CARDS = METRIC_CARDS
+    TH_DATE_FILTER_DROPDOWN = DATE_FILTER_DROPDOWN
+    TH_FILTER_1BULAN = FILTER_1BULAN
+    TH_FILTER_3BULAN = FILTER_3BULAN
+    TH_CROP_TOP_LEFT = CROP_TOP_LEFT
+    TH_CROP_BOTTOM_RIGHT = CROP_BOTTOM_RIGHT
 
 # --- Brand list ---
 BRANDS = {}
@@ -81,8 +122,8 @@ def is_card_selected(card_pos, debug_name=None):
     best_sat = 0
     for dy in range(-70, -4):
         for dx in range(-80, 81, 10):
-            px_x = (cx + dx) * 2
-            px_y = (cy + dy) * 2
+            px_x = (cx + dx) * SCREEN_SCALE
+            px_y = (cy + dy) * SCREEN_SCALE
             r, g, b = img.getpixel((px_x, px_y))[:3]
             max_c = max(r, g, b)
             min_c = min(r, g, b)
@@ -99,10 +140,10 @@ def is_card_selected(card_pos, debug_name=None):
         safe_name = debug_name.replace(" ", "_").replace("/", "_")
         dbg_path = os.path.join(SCREENSHOT_DIR, f"_dbg_{safe_name}.png")
         crop_box = (
-            max(0, (cx - 100) * 2),
-            max(0, (cy - 80) * 2),
-            min(img.width, (cx + 100) * 2),
-            min(img.height, (cy + 20) * 2),
+            max(0, (cx - 100) * SCREEN_SCALE),
+            max(0, (cy - 80) * SCREEN_SCALE),
+            min(img.width, (cx + 100) * SCREEN_SCALE),
+            min(img.height, (cy + 20) * SCREEN_SCALE),
         )
         img.crop(crop_box).save(dbg_path)
     os.remove(tmp_path)
@@ -116,7 +157,11 @@ def notify(message):
     ])
 
 
-def take_screenshot(brand_akun, filter_name, y_offset=0):
+def take_screenshot(brand_akun, filter_name, y_offset=0, crop_tl=None, crop_br=None):
+    if crop_tl is None:
+        crop_tl = CROP_TOP_LEFT
+    if crop_br is None:
+        crop_br = CROP_BOTTOM_RIGHT
     timestamp = datetime.now().strftime("%Y%m%d")
     filename = f"{brand_akun}_{filter_name}_{timestamp}.png"
     filepath = os.path.join(SCREENSHOT_DIR, filename)
@@ -125,10 +170,10 @@ def take_screenshot(brand_akun, filter_name, y_offset=0):
     subprocess.run(["screencapture", "-x", tmp_path])
     from PIL import Image
     img = Image.open(tmp_path)
-    x1 = CROP_TOP_LEFT[0] * 2
-    y1 = (CROP_TOP_LEFT[1] + y_offset) * 2
-    x2 = CROP_BOTTOM_RIGHT[0] * 2
-    y2 = (CROP_BOTTOM_RIGHT[1] + y_offset) * 2
+    x1 = crop_tl[0] * SCREEN_SCALE
+    y1 = (crop_tl[1] + y_offset) * SCREEN_SCALE
+    x2 = crop_br[0] * SCREEN_SCALE
+    y2 = (crop_br[1] + y_offset) * SCREEN_SCALE
     cropped = img.crop((x1, y1, x2, y2))
     cropped.save(filepath)
     os.remove(tmp_path)
@@ -181,10 +226,15 @@ def is_popup_present():
     subprocess.run(["screencapture", "-x", tmp_path])
     from PIL import Image
     img = Image.open(tmp_path)
-    sample_points = [(400, 900), (1400, 900), (400, 300)]
+    w, h = img.size
+    sample_points = [
+        (int(w * 0.2), int(h * 0.8)),
+        (int(w * 0.8), int(h * 0.8)),
+        (int(w * 0.2), int(h * 0.3)),
+    ]
     dim_count = 0
     for x, y in sample_points:
-        r, g, b = img.getpixel((x * 2, y * 2))[:3]
+        r, g, b = img.getpixel((x, y))[:3]
         if r < 80 and g < 80 and b < 80:
             dim_count += 1
     os.remove(tmp_path)
@@ -196,15 +246,19 @@ def close_popup():
     if not is_popup_present():
         print("    No popup detected, continuing...")
         return
-    pyautogui.press("escape")
+    print("    Popup detected, clicking X button...")
+    if IS_MAC_MINI:
+        pyautogui.click(1217, 290)
+    else:
+        pyautogui.press("escape")
     time.sleep(CLICK_DELAY)
     if not is_popup_present():
-        print("    Popup closed with Escape")
+        print("    Popup closed")
         return
     pyautogui.press("escape")
     time.sleep(CLICK_DELAY)
     if not is_popup_present():
-        print("    Popup closed with second Escape")
+        print("    Popup closed with Escape")
         return
     subprocess.run([
         "osascript", "-e",
@@ -212,26 +266,40 @@ def close_popup():
     ])
 
 
-def select_date_filter(filter_name, y_offset=0):
+def select_date_filter(filter_name, y_offset=0, dropdown=None, btn_1bulan=None, btn_3bulan=None):
+    if dropdown is None:
+        dropdown = DATE_FILTER_DROPDOWN
+    if btn_1bulan is None:
+        btn_1bulan = FILTER_1BULAN
+    if btn_3bulan is None:
+        btn_3bulan = FILTER_3BULAN
     pyautogui.moveTo(855, 400)
     time.sleep(0.5)
-    pyautogui.click(DATE_FILTER_DROPDOWN[0], DATE_FILTER_DROPDOWN[1] + y_offset)
+    pyautogui.click(dropdown[0], dropdown[1] + y_offset)
     time.sleep(2)
     if filter_name == "1bulan":
-        pyautogui.click(FILTER_1BULAN[0], FILTER_1BULAN[1] + y_offset)
+        pyautogui.click(btn_1bulan[0], btn_1bulan[1] + y_offset)
     else:
-        pyautogui.click(FILTER_3BULAN[0], FILTER_3BULAN[1] + y_offset)
+        pyautogui.click(btn_3bulan[0], btn_3bulan[1] + y_offset)
     time.sleep(PAGE_LOAD_WAIT + 2)
 
 
-def scroll_to_performa():
+def scroll_to_performa(akun=""):
+    is_thai = akun.startswith("TH.")
     pyautogui.moveTo(855, 500)
     time.sleep(0.5)
-    pyautogui.scroll(-7)
-    time.sleep(SCROLL_DELAY)
-    pyautogui.scroll(-8)
-    time.sleep(SCROLL_DELAY)
-    pyautogui.scroll(-3)
+    if IS_MAC_MINI:
+        pyautogui.scroll(-7)
+        time.sleep(SCROLL_DELAY)
+        pyautogui.scroll(-7)
+        time.sleep(SCROLL_DELAY)
+        pyautogui.scroll(-5)
+    else:
+        pyautogui.scroll(-7)
+        time.sleep(SCROLL_DELAY)
+        pyautogui.scroll(-8)
+        time.sleep(SCROLL_DELAY)
+        pyautogui.scroll(-3)
     time.sleep(2)
 
 
@@ -247,7 +315,7 @@ def detect_y_offset():
     from PIL import Image
     img = Image.open(tmp_path)
     _, height = img.size
-    x_screen = METRIC_CARDS["Iklan Dilihat"][0] * 2
+    x_screen = METRIC_CARDS["Iklan Dilihat"][0] * SCREEN_SCALE
     in_white = False
     white_start = None
     for y in range(600, min(1500, height)):
@@ -259,9 +327,12 @@ def detect_y_offset():
         elif not is_white and in_white:
             run_len = y - white_start
             if run_len >= 100:
-                actual_top_logical = white_start // 2
+                actual_top_logical = white_start // SCREEN_SCALE
                 os.remove(tmp_path)
                 offset = actual_top_logical - EXPECTED_CARD_TOP_Y
+                if abs(offset) > 100:
+                    print(f"    Card top detected at logical y={actual_top_logical} (offset {offset:+d}) — too large, ignoring")
+                    return 0
                 print(f"    Card top detected at logical y={actual_top_logical} (offset {offset:+d})")
                 return offset
             in_white = False
@@ -289,6 +360,14 @@ def process_brand(akun):
     print(f"Processing: {akun} ({username})")
     print(f"{'='*50}")
 
+    is_thai = akun.startswith("TH.")
+    metric_cards = TH_METRIC_CARDS if is_thai else METRIC_CARDS
+    crop_tl = TH_CROP_TOP_LEFT if is_thai else CROP_TOP_LEFT
+    crop_br = TH_CROP_BOTTOM_RIGHT if is_thai else CROP_BOTTOM_RIGHT
+    date_dropdown = TH_DATE_FILTER_DROPDOWN if is_thai else DATE_FILTER_DROPDOWN
+    btn_1bulan = TH_FILTER_1BULAN if is_thai else FILTER_1BULAN
+    btn_3bulan = TH_FILTER_3BULAN if is_thai else FILTER_3BULAN
+
     screenshots = []
 
     print("  1. Selecting 'Username Toko' filter...")
@@ -307,12 +386,12 @@ def process_brand(akun):
     close_popup()
 
     print("  7. Scrolling to Performa section...")
-    scroll_to_performa()
+    scroll_to_performa(akun)
 
     print("  7b. Detecting card position offset...")
     y_offset = detect_y_offset()
 
-    cards_adjusted = {name: (x, y + y_offset) for name, (x, y) in METRIC_CARDS.items()}
+    cards_adjusted = {name: (x, y + y_offset) for name, (x, y) in metric_cards.items()}
 
     print("  8. Setting chart metrics (need: only Biaya Iklan + ROAS)...")
     for name, pos in cards_adjusted.items():
@@ -334,10 +413,10 @@ def process_brand(akun):
         label = "1 bulan" if filter_name == "1bulan" else "3 bulan"
 
         print(f"  7. Selecting '{label}' filter...")
-        select_date_filter(filter_name, y_offset=y_offset)
+        select_date_filter(filter_name, y_offset=y_offset, dropdown=date_dropdown, btn_1bulan=btn_1bulan, btn_3bulan=btn_3bulan)
 
         print(f"  8. Taking screenshot ({filter_name})...")
-        path = take_screenshot(akun, filter_name, y_offset=y_offset)
+        path = take_screenshot(akun, filter_name, y_offset=y_offset, crop_tl=crop_tl, crop_br=crop_br)
         screenshots.append(path)
 
     print("  9. Going back to Pilih Toko...")
@@ -365,7 +444,11 @@ def calibrate():
 
     results = {}
     for name, desc in elements:
-        input(f"Hover over {desc}, then press ENTER...")
+        subprocess.run([
+            "osascript", "-e",
+            f'display dialog "Click OK then hover over {desc} within 10 seconds." with title "Calibrate" buttons {{"OK"}} default button "OK"'
+        ])
+        time.sleep(10)
         pos = pyautogui.position()
         results[name] = (pos.x, pos.y)
         print(f"  {name} = ({pos.x}, {pos.y})")

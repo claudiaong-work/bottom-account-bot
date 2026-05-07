@@ -7,11 +7,11 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-from config import SLIDES_ID, MEETING_SLIDES_ID
+from config import SLIDES_ID, MEETING_SLIDES_ID, WEEKLY_SLIDES_ID
 
 SCOPES = [
     "https://www.googleapis.com/auth/presentations",
-    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/drive",
 ]
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -231,12 +231,12 @@ def find_sho_roas_slides(slides_service, pres_id):
     return brand_slides
 
 
-def replace_meeting_screenshots(slides_service, drive_service, brand_akun, screenshots):
-    """Replace ad screenshots in the meeting presentation."""
-    roas_map = find_sho_roas_slides(slides_service, MEETING_SLIDES_ID)
+def replace_meeting_screenshots(slides_service, drive_service, brand_akun, screenshots, pres_id):
+    """Replace ad screenshots in a presentation."""
+    roas_map = find_sho_roas_slides(slides_service, pres_id)
 
     if brand_akun not in roas_map:
-        print(f"  No ROAS slides found for {brand_akun} in meeting deck, skipping")
+        print(f"  No ROAS slides found for {brand_akun}, skipping")
         return
 
     brand_data = roas_map[brand_akun]
@@ -253,8 +253,7 @@ def replace_meeting_screenshots(slides_service, drive_service, brand_akun, scree
         safe_name = brand_akun.replace(".", "_")
         new_img_id = f"meeting_img_{safe_name}_{key}_{os.urandom(4).hex()}"
 
-        # Get old image position/size to match
-        pres = slides_service.presentations().get(presentationId=MEETING_SLIDES_ID).execute()
+        pres = slides_service.presentations().get(presentationId=pres_id).execute()
         old_size = None
         old_transform = None
         for slide in pres.get("slides", []):
@@ -281,7 +280,7 @@ def replace_meeting_screenshots(slides_service, drive_service, brand_akun, scree
             },
         ]
         slides_service.presentations().batchUpdate(
-            presentationId=MEETING_SLIDES_ID,
+            presentationId=pres_id,
             body={"requests": requests},
         ).execute()
         label = "1 Bulan" if key == "1bulan" else "3 Bulan"
@@ -298,6 +297,15 @@ def main():
     creds = get_credentials()
     slides_service = build("slides", "v1", credentials=creds)
     drive_service = build("drive", "v3", credentials=creds)
+
+    from datetime import datetime
+    today = datetime.now().strftime("%Y%m%d")
+    print(f"Creating backup of weekly deck...")
+    backup = drive_service.files().copy(
+        fileId=WEEKLY_SLIDES_ID,
+        body={"name": f"FBI Bottom Account - Backup {today}"},
+    ).execute()
+    print(f"  Backup: https://docs.google.com/presentation/d/{backup['id']}/edit")
 
     screenshots_dir = os.path.join(BASE_DIR, "screenshots")
 
@@ -322,7 +330,9 @@ def main():
         delete_existing_brand_slides(slides_service, akun)
         add_brand_slide(slides_service, drive_service, akun, screenshots)
         print(f"  Replacing in meeting deck...")
-        replace_meeting_screenshots(slides_service, drive_service, akun, screenshots)
+        replace_meeting_screenshots(slides_service, drive_service, akun, screenshots, MEETING_SLIDES_ID)
+        print(f"  Replacing in weekly deck...")
+        replace_meeting_screenshots(slides_service, drive_service, akun, screenshots, WEEKLY_SLIDES_ID)
 
     print("\nDone! Check your Google Slides.")
 

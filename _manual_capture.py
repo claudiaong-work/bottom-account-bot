@@ -8,7 +8,7 @@ from datetime import datetime
 from PIL import Image
 
 from config import SCREENSHOT_DIR
-from shopee_ads_screenshot import CROP_TOP_LEFT, CROP_BOTTOM_RIGHT
+from shopee_ads_screenshot import CROP_TOP_LEFT, CROP_BOTTOM_RIGHT, SCREEN_SCALE
 
 AKUN = sys.argv[1].upper() if len(sys.argv) > 1 else "ALUN-M"
 timestamp = datetime.now().strftime("%Y%m%d")
@@ -24,10 +24,10 @@ def capture(filter_name):
     tmp_path = os.path.join(SCREENSHOT_DIR, "_tmp_full.png")
     subprocess.run(["screencapture", "-x", tmp_path])
     img = Image.open(tmp_path)
-    x1 = CROP_TOP_LEFT[0] * 2
-    y1 = CROP_TOP_LEFT[1] * 2
-    x2 = CROP_BOTTOM_RIGHT[0] * 2
-    y2 = CROP_BOTTOM_RIGHT[1] * 2
+    x1 = CROP_TOP_LEFT[0] * SCREEN_SCALE
+    y1 = CROP_TOP_LEFT[1] * SCREEN_SCALE
+    x2 = CROP_BOTTOM_RIGHT[0] * SCREEN_SCALE
+    y2 = (CROP_BOTTOM_RIGHT[1]) * SCREEN_SCALE
     img.crop((x1, y1, x2, y2)).save(filepath)
     os.remove(tmp_path)
     print(f"Saved: {filepath}")
