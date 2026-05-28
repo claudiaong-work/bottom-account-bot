@@ -28,22 +28,23 @@ FIRST_DETAIL_LINK = (1225, 540)
 IKLAN_SHOPEE_MENU = (80, 739)
 
 # Iklan Shopee page (positions after scrolling down)
-DATE_FILTER_DROPDOWN = (1108, 479)
-FILTER_1BULAN = (627, 628)
-FILTER_3BULAN = (663, 662)
+SEMUA_IKLAN_PRODUK_TAB = (280, 430)
+DATE_FILTER_DROPDOWN = (1103, 484)
+FILTER_1BULAN = (647, 622)
+FILTER_3BULAN = (675, 657)
 
 # Metric cards (4 per row, evenly spaced)
 # Row 1 (y=564): Iklan Dilihat, Produk Terjual, Jumlah Klik, Penjualan dari Iklan
 # Row 2 (y=666): Persentase Klik, Biaya Iklan, Pesanan, ROAS
 METRIC_CARDS = {
-    "Iklan Dilihat":        (459, 571),
-    "Produk Terjual":       (473, 649),
-    "Jumlah Klik":          (813, 552),
-    "Penjualan dari Iklan": (798, 667),
-    "Persentase Klik":      (1059, 568),
-    "Biaya Iklan":          (1108, 656),
-    "Pesanan":              (1395, 559),
-    "ROAS":                 (1403, 664),
+    "Iklan Dilihat":         (461, 552),
+    "Produk Terjual":        (458, 650),
+    "Jumlah Klik":           (816, 557),
+    "Penjualan dari Iklan":  (777, 660),
+    "Persentase Klik":       (1089, 551),
+    "Biaya Iklan":           (1065, 644),
+    "Pesanan":               (1396, 545),
+    "ROAS":                  (1430, 676),
 }
 DESIRED_SELECTED = {"Biaya Iklan", "ROAS"}
 
@@ -236,36 +237,50 @@ def scroll_to_performa():
 
 
 # Calibrated row-1 card top edge (logical y). Used as anchor for auto-detect.
-EXPECTED_CARD_TOP_Y = 536
+EXPECTED_CARD_TOP_Y = 517
 
 
 def detect_y_offset():
     """Scan for the actual top of row 1 cards and return offset from calibrated.
-    Positive = page scrolled less than calibrated (cards lower); negative = more (cards higher)."""
+    Positive = page scrolled less than calibrated (cards lower); negative = more (cards higher).
+
+    Requires the structural pattern of TWO long white runs (row 1 and row 2 card interiors)
+    separated by a short non-white gap (the gap between rows). Plain white space above the
+    Performa section produces only one run and is rejected.
+    """
     tmp_path = os.path.join(SCREENSHOT_DIR, "_tmp_offset.png")
     subprocess.run(["screencapture", "-x", tmp_path])
     from PIL import Image
     img = Image.open(tmp_path)
     _, height = img.size
     x_screen = METRIC_CARDS["Iklan Dilihat"][0] * 2
+
+    runs = []
     in_white = False
     white_start = None
-    for y in range(600, min(1500, height)):
+    for y in range(400, min(1800, height)):
         r, g, b = img.getpixel((x_screen, y))[:3]
         is_white = r > 248 and g > 248 and b > 248
         if is_white and not in_white:
             in_white = True
             white_start = y
         elif not is_white and in_white:
-            run_len = y - white_start
-            if run_len >= 100:
-                actual_top_logical = white_start // 2
-                os.remove(tmp_path)
-                offset = actual_top_logical - EXPECTED_CARD_TOP_Y
-                print(f"    Card top detected at logical y={actual_top_logical} (offset {offset:+d})")
-                return offset
+            runs.append((white_start, y, y - white_start))
             in_white = False
     os.remove(tmp_path)
+
+    # Look for two consecutive long white runs (≥100 screen px = ≥50 logical) with a
+    # short gap between them (20–80 screen px) — the row1/row2 card pattern.
+    for i in range(len(runs) - 1):
+        s1, e1, l1 = runs[i]
+        s2, e2, l2 = runs[i + 1]
+        gap = s2 - e1
+        if l1 >= 100 and l2 >= 100 and 20 <= gap <= 80:
+            actual_top_logical = s1 // 2
+            offset = actual_top_logical - EXPECTED_CARD_TOP_Y
+            print(f"    Card top detected at logical y={actual_top_logical} (offset {offset:+d})")
+            return offset
+
     print("    Could not detect card position, assuming offset=0")
     return 0
 
@@ -308,6 +323,10 @@ def process_brand(akun):
 
     print("  7. Scrolling to Performa section...")
     scroll_to_performa()
+
+    print("  7a. Forcing 'Semua Iklan Produk' tab...")
+    pyautogui.click(*SEMUA_IKLAN_PRODUK_TAB)
+    time.sleep(2)
 
     print("  7b. Detecting card position offset...")
     y_offset = detect_y_offset()

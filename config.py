@@ -1,6 +1,10 @@
 SELLER_CENTER_URL = "https://seller.shopee.co.id"
 SLIDES_ID = "1Ott0JcNme2979Obe4VpJNQey7Pyr6mP5YNGeK2XiFC4"
-MEETING_SLIDES_ID = "12BCe2jvkoG1z01il6bBQRHkW3Z2aOSMUAIKG8JzqFuM"
+MEETING_SLIDES_IDS = [
+    "12BCe2jvkoG1z01il6bBQRHkW3Z2aOSMUAIKG8JzqFuM",
+    "1f2QVMCagabXk6RidXLIYhpI6uBCVBougOKs7RPEotCE",
+]
+MEETING_SLIDES_ID = MEETING_SLIDES_IDS[0]  # back-compat for any old refs
 
 SCREENSHOT_DIR = "screenshots"
 

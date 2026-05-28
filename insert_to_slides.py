@@ -7,7 +7,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-from config import SLIDES_ID, MEETING_SLIDES_ID
+from config import SLIDES_ID, MEETING_SLIDES_ID, MEETING_SLIDES_IDS
 
 SCOPES = [
     "https://www.googleapis.com/auth/presentations",
@@ -231,61 +231,65 @@ def find_sho_roas_slides(slides_service, pres_id):
     return brand_slides
 
 
-def replace_meeting_screenshots(slides_service, drive_service, brand_akun, screenshots):
-    """Replace ad screenshots in the meeting presentation."""
-    roas_map = find_sho_roas_slides(slides_service, MEETING_SLIDES_ID)
+def replace_meeting_screenshots(slides_service, drive_service, brand_akun, screenshots, meeting_id=None):
+    """Replace ad screenshots in a meeting presentation. If meeting_id is None,
+    runs against every deck in MEETING_SLIDES_IDS."""
+    deck_ids = [meeting_id] if meeting_id else MEETING_SLIDES_IDS
 
-    if brand_akun not in roas_map:
-        print(f"  No ROAS slides found for {brand_akun} in meeting deck, skipping")
-        return
+    for deck_id in deck_ids:
+        roas_map = find_sho_roas_slides(slides_service, deck_id)
 
-    brand_data = roas_map[brand_akun]
-    print(f"  Uploading screenshots to Drive...")
-    filters = [("1bulan", screenshots[0]), ("3bulan", screenshots[1])]
-
-    for key, img_path in filters:
-        if key not in brand_data:
-            print(f"  No {key} ROAS slide for {brand_akun}, skipping")
+        if brand_akun not in roas_map:
+            print(f"  [{deck_id[:8]}…] No ROAS slides found for {brand_akun}, skipping")
             continue
 
-        slide_id, old_img_id = brand_data[key]
-        img_url = upload_image_to_drive(drive_service, img_path)
-        safe_name = brand_akun.replace(".", "_")
-        new_img_id = f"meeting_img_{safe_name}_{key}_{os.urandom(4).hex()}"
+        brand_data = roas_map[brand_akun]
+        print(f"  [{deck_id[:8]}…] Uploading screenshots to Drive...")
+        filters = [("1bulan", screenshots[0]), ("3bulan", screenshots[1])]
 
-        # Get old image position/size to match
-        pres = slides_service.presentations().get(presentationId=MEETING_SLIDES_ID).execute()
-        old_size = None
-        old_transform = None
-        for slide in pres.get("slides", []):
-            if slide["objectId"] != slide_id:
+        for key, img_path in filters:
+            if key not in brand_data:
+                print(f"  [{deck_id[:8]}…] No {key} ROAS slide for {brand_akun}, skipping")
                 continue
-            for el in slide.get("pageElements", []):
-                if el["objectId"] == old_img_id:
-                    old_size = el["size"]
-                    old_transform = el["transform"]
-                    break
 
-        requests = [
-            {"deleteObject": {"objectId": old_img_id}},
-            {
-                "createImage": {
-                    "objectId": new_img_id,
-                    "url": img_url,
-                    "elementProperties": {
-                        "pageObjectId": slide_id,
-                        "size": old_size,
-                        "transform": old_transform,
-                    },
-                }
-            },
-        ]
-        slides_service.presentations().batchUpdate(
-            presentationId=MEETING_SLIDES_ID,
-            body={"requests": requests},
-        ).execute()
-        label = "1 Bulan" if key == "1bulan" else "3 Bulan"
-        print(f"  Replaced {label} screenshot for {brand_akun}")
+            slide_id, old_img_id = brand_data[key]
+            img_url = upload_image_to_drive(drive_service, img_path)
+            safe_name = brand_akun.replace(".", "_")
+            new_img_id = f"meeting_img_{safe_name}_{key}_{os.urandom(4).hex()}"
+
+            # Get old image position/size to match
+            pres = slides_service.presentations().get(presentationId=deck_id).execute()
+            old_size = None
+            old_transform = None
+            for slide in pres.get("slides", []):
+                if slide["objectId"] != slide_id:
+                    continue
+                for el in slide.get("pageElements", []):
+                    if el["objectId"] == old_img_id:
+                        old_size = el["size"]
+                        old_transform = el["transform"]
+                        break
+
+            requests = [
+                {"deleteObject": {"objectId": old_img_id}},
+                {
+                    "createImage": {
+                        "objectId": new_img_id,
+                        "url": img_url,
+                        "elementProperties": {
+                            "pageObjectId": slide_id,
+                            "size": old_size,
+                            "transform": old_transform,
+                        },
+                    }
+                },
+            ]
+            slides_service.presentations().batchUpdate(
+                presentationId=deck_id,
+                body={"requests": requests},
+            ).execute()
+            label = "1 Bulan" if key == "1bulan" else "3 Bulan"
+            print(f"  [{deck_id[:8]}…] Replaced {label} screenshot for {brand_akun}")
 
 
 def main():
