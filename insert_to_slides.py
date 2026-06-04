@@ -6,6 +6,7 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+from googleapiclient.errors import HttpError
 
 from config import SLIDES_ID, MEETING_SLIDES_ID, MEETING_SLIDES_IDS
 
@@ -106,7 +107,10 @@ def add_brand_slide(slides_service, drive_service, brand_akun, screenshots):
     labels = ["SHO ROAS 1 Bulan Terakhir", "SHO ROAS 3 Bulan Terakhir"]
 
     safe_name = brand_akun.replace(".", "_")
-    for idx, (url, label) in enumerate(zip(img_urls, labels)):
+    # Iterate in reverse: duplicateObject inserts the new slide directly after
+    # the template, so the last one duplicated ends up on top. Creating 3bulan
+    # first then 1bulan leaves the deck in order [template, 1bulan, 3bulan].
+    for idx, (url, label) in reversed(list(enumerate(zip(img_urls, labels)))):
         rand = os.urandom(4).hex()
         new_slide_id = f"slide_{safe_name}_{idx}_{rand}"
         new_title_id = f"title_{safe_name}_{idx}_{rand}"
@@ -305,6 +309,7 @@ def main():
 
     screenshots_dir = os.path.join(BASE_DIR, "screenshots")
 
+    failed = []
     for akun in brand_list:
         files = sorted([
             f for f in os.listdir(screenshots_dir)
@@ -316,6 +321,7 @@ def main():
 
         if not one_bulan or not three_bulan:
             print(f"Missing screenshots for {akun}, skipping")
+            failed.append((akun, "missing screenshots"))
             continue
 
         screenshots = [
@@ -323,12 +329,36 @@ def main():
             os.path.join(screenshots_dir, three_bulan),
         ]
         print(f"\n{akun}: {one_bulan}, {three_bulan}")
-        delete_existing_brand_slides(slides_service, akun)
-        add_brand_slide(slides_service, drive_service, akun, screenshots)
-        print(f"  Replacing in meeting deck...")
-        replace_meeting_screenshots(slides_service, drive_service, akun, screenshots)
+
+        # Retry the whole brand on transient Slides/Drive API errors (e.g. HTTP
+        # 500 "Internal error"). Both steps are idempotent — the template deck
+        # deletes + re-adds the brand's slides, and the meeting decks replace
+        # images in-place — so re-running a brand is safe. A brand that still
+        # fails after retries is recorded and the run continues with the rest.
+        success = False
+        for attempt in range(3):
+            try:
+                delete_existing_brand_slides(slides_service, akun)
+                add_brand_slide(slides_service, drive_service, akun, screenshots)
+                print(f"  Replacing in meeting deck...")
+                replace_meeting_screenshots(slides_service, drive_service, akun, screenshots)
+                success = True
+                break
+            except HttpError as e:
+                wait = 5 * (attempt + 1)
+                print(f"  ⚠ API error for {akun} (attempt {attempt + 1}/3): {e}")
+                if attempt < 2:
+                    print(f"    Retrying in {wait}s...")
+                    time.sleep(wait)
+        if not success:
+            failed.append((akun, "API error after retries"))
+            print(f"  ✗ {akun} FAILED after retries — needs manual redo")
 
     print("\nDone! Check your Google Slides.")
+    if failed:
+        print("\n⚠ FAILED brands (redo these):")
+        for akun, why in failed:
+            print(f"    - {akun}: {why}")
 
 
 if __name__ == "__main__":

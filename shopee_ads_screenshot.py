@@ -80,7 +80,13 @@ def is_card_selected(card_pos, debug_name=None):
     colored_count = 0
     best_sample = (0, 0, 0, 0, 0)  # (dy, dx, r, g, b)
     best_sat = 0
-    for dy in range(-70, -4):
+    # Scan up to 95px above center: row-2 cards (ROAS y=676, Penjualan y=660) sit
+    # low enough that their colored top border lands at dy ≈ -72..-88 — just past
+    # the old -70 limit, so selected cards there were missed and never deselected
+    # (e.g. ALJA-M kept "Penjualan dari Iklan" on). The extra upward range only
+    # samples whitespace/title above the cards (low saturation), so it doesn't add
+    # false positives for cards that are actually off.
+    for dy in range(-95, -4):
         for dx in range(-80, 81, 10):
             px_x = (cx + dx) * 2
             px_y = (cy + dy) * 2
@@ -153,6 +159,81 @@ def search_shop(username):
     time.sleep(0.3)
     pyautogui.press("enter")
     time.sleep(PAGE_LOAD_WAIT)
+
+
+def detail_link_present(akun=None, retries=2):
+    """After searching on Pilih Toko, verify a result row with a blue 'Detail'
+    link exists at FIRST_DETAIL_LINK.
+
+    When the searched username isn't a shop we hold (e.g. STRO-M, which we don't
+    have access to yet), Shopee returns an empty table with no Detail link. The
+    old flow clicked the fixed Detail coord anyway (a no-op on empty space) and
+    then navigated to the Iklan URL, which still showed whatever shop was
+    previously selected — producing a screenshot of the WRONG brand. This guard
+    detects the empty state so the brand is skipped instead.
+
+    Retries to avoid false-negatives when a held account's page is just slow.
+    On final failure, saves a full debug screenshot so we can see what the page
+    actually showed (popup? empty table? wrong filter?).
+    """
+    from PIL import Image
+    cx, cy = FIRST_DETAIL_LINK
+    last_img = None
+    for attempt in range(retries):
+        tmp_path = os.path.join(SCREENSHOT_DIR, "_tmp_detail.png")
+        subprocess.run(["screencapture", "-x", tmp_path])
+        img = Image.open(tmp_path)
+        last_img = img.copy()
+        blue = 0
+        for dy in range(-14, 15):
+            for dx in range(-55, 56):
+                r, g, b = img.getpixel(((cx + dx) * 2, (cy + dy) * 2))[:3]
+                # Shopee link blue (~#2673dd): strong blue, weak red.
+                if b > 170 and b - r > 60 and b - g > 30 and r < 140:
+                    blue += 1
+        os.remove(tmp_path)
+        print(f"    Detail link blue pixels: {blue} (attempt {attempt + 1}/{retries})")
+        if blue >= 10:
+            return True
+        if attempt < retries - 1:
+            time.sleep(1.5)
+    if last_img is not None:
+        dbg = os.path.join(SCREENSHOT_DIR, f"_dbg_detail_fail_{akun or 'unknown'}.png")
+        last_img.save(dbg)
+        print(f"    [debug] saved failure screenshot: {dbg}")
+    return False
+
+
+def search_and_verify(akun, username, attempts=3):
+    """Select the username filter, search, and verify a result row appeared.
+
+    The search intermittently produces no result on longer runs — most likely a
+    promo/ad popup on the Pilih Toko page eats the filter/search clicks, or the
+    result is slow to render. Earlier this surfaced as VALID held accounts (SP,
+    KSB-M) being skipped with blue=0 partway through a run. Rather than skip on
+    the first empty result, this retries the WHOLE search (dismissing any popup
+    with Escape first) up to `attempts` times. A genuinely-unheld account (e.g.
+    STRO-M) fails every attempt and is still correctly skipped.
+
+    Returns True if the 'Detail' link is detected, else False.
+    """
+    for attempt in range(attempts):
+        # ROOT CAUSE (confirmed via debug screenshot): the previous brand's
+        # go_back_to_pilih_toko intermittently fails — a popup on the Iklan page
+        # intercepts the Cmd+L navigation — leaving us stuck on the PREVIOUS
+        # brand's Iklan page. Then the filter/search clicks land on the wrong
+        # page and the result never appears (blue=0). So each attempt explicitly
+        # RE-NAVIGATES to Pilih Toko (go_back_to_pilih_toko dismisses popups with
+        # Escape first) before selecting the filter and searching again.
+        go_back_to_pilih_toko()
+        select_username_filter()
+        search_shop(username)
+        if detail_link_present(akun):
+            if attempt > 0:
+                print(f"    Search succeeded on attempt {attempt + 1}/{attempts}")
+            return True
+        print(f"    No result on attempt {attempt + 1}/{attempts} — re-navigating + re-searching...")
+    return False
 
 
 def click_first_detail():
@@ -286,6 +367,14 @@ def detect_y_offset():
 
 
 def go_back_to_pilih_toko(akun=None):
+    # Dismiss any popup on the current (Iklan) page first — a popup has been seen
+    # to intercept the Cmd+L navigation and leave the bot stuck on the previous
+    # brand's page, which then cascades into wrong/empty searches for every
+    # subsequent brand. Two Escapes for popups that need a second dismiss.
+    pyautogui.press("escape")
+    time.sleep(0.3)
+    pyautogui.press("escape")
+    time.sleep(0.3)
     pyautogui.hotkey("command", "l")
     time.sleep(0.5)
     pyautogui.typewrite("https://seller.shopee.co.id/portal/shop", interval=0.01)
@@ -306,11 +395,11 @@ def process_brand(akun):
 
     screenshots = []
 
-    print("  1. Selecting 'Username Toko' filter...")
-    select_username_filter()
-
-    print("  2. Searching for shop...")
-    search_shop(username)
+    print("  1-2. Searching for shop (filter + search + verify, with retries)...")
+    if not search_and_verify(akun, username):
+        print(f"  ⚠ '{akun}' not found on Pilih Toko after retries — account likely "
+              f"not held. Skipping to avoid screenshotting the previously-selected shop.")
+        return None
 
     print("  3. Clicking Detail...")
     click_first_detail()
@@ -491,14 +580,20 @@ def main():
     print(f"Brands: {', '.join(brand_list)}")
     print("=" * 50)
 
-    print("Starting in 3 seconds... switch to your browser!")
-    time.sleep(3)
+    countdown = 10
+    print(f"Starting in {countdown} seconds — switch to Shopee 'Pilih Toko' now!")
+    for i in range(countdown, 0, -1):
+        print(f"  ...{i}")
+        time.sleep(1)
 
     all_screenshots = {}
+    not_found = []
     for akun in brand_list:
         screenshots = process_brand(akun)
         if screenshots:
             all_screenshots[akun] = screenshots
+        elif screenshots is None:
+            not_found.append(akun)
 
     print("\n" + "=" * 50)
     print("DONE! Screenshots saved:")
@@ -506,9 +601,17 @@ def main():
         print(f"  {akun}:")
         for p in paths:
             print(f"    - {p}")
+    if not_found:
+        print("\n⚠ NOT FOUND (skipped — account not held / no search result):")
+        for akun in not_found:
+            print(f"    - {akun}")
+        print("  → Verify these manually; no screenshot was taken.")
     print("=" * 50)
 
-    notify("All screenshots done!")
+    msg = "All screenshots done!"
+    if not_found:
+        msg += f" Skipped (not found): {', '.join(not_found)}"
+    notify(msg)
     return all_screenshots
 
 
