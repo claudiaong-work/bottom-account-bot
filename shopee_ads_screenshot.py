@@ -21,37 +21,41 @@ pyautogui.PAUSE = 0.3
 
 # --- Coordinate map (pyautogui coords for 1710x1112 screen) ---
 # Pilih Toko page
-SEARCH_BOX = (511, 336)
-FIRST_DETAIL_LINK = (1225, 540)
+SEARCH_BOX = (498, 296)
+FIRST_DETAIL_LINK = (1222, 507)
 
 # Shop dashboard - sidebar
 IKLAN_SHOPEE_MENU = (80, 739)
 
 # Iklan Shopee page (positions after scrolling down)
 SEMUA_IKLAN_PRODUK_TAB = (280, 430)
-DATE_FILTER_DROPDOWN = (1103, 484)
-FILTER_1BULAN = (647, 622)
-FILTER_3BULAN = (675, 657)
+DATE_FILTER_DROPDOWN = (1110, 432)
+FILTER_1BULAN = (664, 575)
+FILTER_3BULAN = (664, 605)
 
 # Metric cards (4 per row, evenly spaced)
-# Row 1 (y=564): Iklan Dilihat, Produk Terjual, Jumlah Klik, Penjualan dari Iklan
-# Row 2 (y=666): Persentase Klik, Biaya Iklan, Pesanan, ROAS
+# Row 1 (y=564): Tayangan, Produk Terjual, Jumlah Klik, Penjualan dari Iklan
+# Row 2 (y=666): Persentase Klik, Pengeluaran, Pesanan, ROAS
+# NOTE: Shopee renamed cards 2026-06: "Iklan Dilihat"->"Tayangan", "Biaya Iklan"->"Pengeluaran".
+# Order/positions unchanged.
 METRIC_CARDS = {
-    "Iklan Dilihat":         (461, 552),
-    "Produk Terjual":        (458, 650),
-    "Jumlah Klik":           (816, 557),
-    "Penjualan dari Iklan":  (777, 660),
-    "Persentase Klik":       (1089, 551),
-    "Biaya Iklan":           (1065, 644),
-    "Pesanan":               (1396, 545),
-    "ROAS":                  (1430, 676),
+    # Measured 2026-06-11 from a live full screencapture (uniform grid, not hover):
+    # columns x=390/742/1094/1446 (≈352px apart), rows y=512/612.
+    "Tayangan":              (390, 512),
+    "Produk Terjual":        (390, 612),
+    "Jumlah Klik":           (742, 512),
+    "Penjualan dari Iklan":  (742, 612),
+    "Persentase Klik":       (1094, 512),
+    "Pengeluaran":           (1094, 612),
+    "Pesanan":               (1446, 512),
+    "ROAS":                  (1446, 612),
 }
-DESIRED_SELECTED = {"Biaya Iklan", "ROAS"}
+DESIRED_SELECTED = {"Pengeluaran", "ROAS"}
 
 
 # Search filter dropdown
-NAMA_TOKO_DROPDOWN = (397, 322)
-USERNAME_TOKO_OPTION = (418, 400)
+NAMA_TOKO_DROPDOWN = (386, 292)
+USERNAME_TOKO_OPTION = (397, 368)
 
 # Screenshot crop region (pyautogui coords)
 CROP_TOP_LEFT = (205, 458)
@@ -334,7 +338,7 @@ def detect_y_offset():
     from PIL import Image
     img = Image.open(tmp_path)
     _, height = img.size
-    x_screen = METRIC_CARDS["Iklan Dilihat"][0] * 2
+    x_screen = METRIC_CARDS["Tayangan"][0] * 2
 
     runs = []
     in_white = False
@@ -422,7 +426,7 @@ def process_brand(akun):
 
     cards_adjusted = {name: (x, y + y_offset) for name, (x, y) in METRIC_CARDS.items()}
 
-    print("  8. Setting chart metrics (need: only Biaya Iklan + ROAS)...")
+    print("  8. Setting chart metrics (need: only Pengeluaran + ROAS)...")
     for name, pos in cards_adjusted.items():
         selected = is_card_selected(pos, debug_name=name)
         should_be = name in DESIRED_SELECTED
@@ -492,8 +496,8 @@ def calibrate_cards():
     ])
 
     card_names = [
-        "Iklan Dilihat", "Produk Terjual", "Jumlah Klik", "Penjualan dari Iklan",
-        "Persentase Klik", "Biaya Iklan", "Pesanan", "ROAS",
+        "Tayangan", "Produk Terjual", "Jumlah Klik", "Penjualan dari Iklan",
+        "Persentase Klik", "Pengeluaran", "Pesanan", "ROAS",
     ]
     results = {}
     for name in card_names:

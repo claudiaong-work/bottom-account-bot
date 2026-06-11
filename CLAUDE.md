@@ -19,6 +19,9 @@ Weekly Thursday automation: screenshot Shopee ads performance for underperformin
 - `_calibrate_helper.py` — Navigates to a brand's Iklan Shopee page, scrolls to Performa, then runs `calibrate_cards()` (used when the page must be set up before card calibration).
 - `_calibrate_crop_helper.py` — Same as above but runs `calibrate_crop()` to re-record the screenshot crop region.
 - `_calibrate_date.py` — Standalone date-filter calibration (assumes Iklan Shopee page already in view).
+- `_calibrate_date_full.py` — Navigates to a brand's Iklan page + scrolls, THEN runs the date-filter calibration dialogs (use when starting from Pilih Toko). Records `DATE_FILTER_DROPDOWN`, `FILTER_1BULAN`, `FILTER_3BULAN`.
+- `_calibrate_nama_toko.py` / `_calibrate_pilih_toko.py` — Live hover calibration for the Pilih Toko page coords (`NAMA_TOKO_DROPDOWN`, `USERNAME_TOKO_OPTION`, `SEARCH_BOX`, `FIRST_DETAIL_LINK`).
+- `_setup_and_capture.py` — Navigates to a brand's Iklan page, scrolls, takes ONE full screencapture (`/tmp/cards_full.png`) for measuring card centers from the image (more accurate than hover). `_setup_and_track.py` — same nav, then live mouse-position tracker.
 - `_manual_capture.py` — Manual screenshot fallback: dialogs prompt the user to set up the page (correct metrics + filter), bot just screencaptures with the calibrated crop. Use when auto-detect can't recover.
 - `credentials.json` / `token.pickle` — Google OAuth for Slides/Drive (gitignored).
 - `token_gmail.pickle` — Google OAuth for Gmail send (gitignored).
@@ -47,8 +50,8 @@ User must navigate to Pilih Toko page manually before starting the bot. The bot 
 4. Popup handling: checks if dimmed overlay present → tries Escape (twice if needed) → only shows macOS dialog if popup persists. No notification if no popup.
 5. Scroll down to "Performa Seluruh Iklan".
 6. **Force "Semua Iklan Produk" tab**: click `SEMUA_IKLAN_PRODUK_TAB`. Shopee's tab choice is sticky across navigations within a session, so even though `/portal/marketing/pas/index` is the right URL, the page may open on whatever tab was last used (e.g. Iklan Toko). The explicit click is a no-op if already correct.
-7. **Auto-detect y-offset**: scans for the top of row 1 cards (looks for the structural pattern of two long white runs — row 1 and row 2 interiors — separated by a short non-white gap, at the Iklan Dilihat column) and computes offset from calibrated `EXPECTED_CARD_TOP_Y`. The offset is then added to all card click positions, date filter clicks, and the screenshot crop region — handles brands where the page has less content above (e.g. ALUN-M, TH.KSB-M) so a fixed scroll lands the Performa section higher than calibrated. If the pattern isn't found (rare), falls back to offset=0.
-8. Smart metric card detection: scans all 8 metric cards for colored top border (selected state). Deselects everything except **Biaya Iklan + ROAS**. Only clicks cards that need toggling.
+7. **Auto-detect y-offset**: scans for the top of row 1 cards (looks for the structural pattern of two long white runs — row 1 and row 2 interiors — separated by a short non-white gap, at the Tayangan column) and computes offset from calibrated `EXPECTED_CARD_TOP_Y`. The offset is then added to all card click positions, date filter clicks, and the screenshot crop region — handles brands where the page has less content above (e.g. ALUN-M, TH.KSB-M) so a fixed scroll lands the Performa section higher than calibrated. If the pattern isn't found (rare), falls back to offset=0.
+8. Smart metric card detection: scans all 8 metric cards for colored top border (selected state). Deselects everything except **Pengeluaran + ROAS** (formerly "Biaya Iklan"). Only clicks cards that need toggling.
 9. For each of `1 bulan terakhir` and `3 bulan terakhir`: open date filter, pick option, screencapture, crop to the Performa region (offset-adjusted), save.
 10. Go back to Pilih Toko via Cmd+L + `https://seller.shopee.co.id/portal/shop` (always `.co.id`, even for Thai brands).
 
@@ -110,18 +113,21 @@ Calibration flags (`--calibrate`, `--calibrate-cards`, `--calibrate-crop`) use *
 
 ## Metric card positions
 
-8 cards in 2 rows, 4 per row. **Shopee reordered the cards in 2026-04** — current layout (top row first):
+8 cards in 2 rows, 4 per row. **Shopee reordered the cards in 2026-04 and renamed two in 2026-06** (`Iklan Dilihat`→`Tayangan`, `Biaya Iklan`→`Pengeluaran`; order/positions unchanged). Current layout (top row first):
 
-- Row 1 (~y=552): Iklan Dilihat, Jumlah Klik, Persentase Klik, Pesanan
-- Row 2 (~y=657): Produk Terjual, Penjualan dari Iklan, Biaya Iklan, ROAS
+- Row 1 (y=512): Tayangan, Jumlah Klik, Persentase Klik, Pesanan
+- Row 2 (y=612): Produk Terjual, Penjualan dari Iklan, Pengeluaran, ROAS
+- Columns are an even grid at x = 390 / 742 / 1094 / 1446 (~352 logical px apart).
 
-Detection: scans a strip of pixels above the card center (y-70 to y-5) for colored top border. Colored = selected.
+Detection: scans a strip above the card center (`dy -95..-4`, `dx ±80`) for a colored top border (saturation > 0.25, max channel > 100); `colored_count >= 5` ⇒ selected. The colored border sits ~41 logical px above center (`dy ≈ -42`).
 
-Recalibrated 2026-05-11 after a small layout shift moved cards ~19 logical px up.
+Recalibrated 2026-06-11 after a layout shift (browser window moved ~30–40px up) + the card rename. **The card centers were measured directly from a live full screencapture (not hover)** — manual hover calibration kept landing 2 of 8 points in the gaps between cards, so `is_card_selected` scanned empty space and missed selected cards. If recalibrating, prefer measuring the grid from a screenshot (see `_setup_and_capture.py`) over blind hovers.
 
 ## Auto-detect y-offset
 
-`detect_y_offset()` is called after `scroll_to_performa()` and the Semua Iklan Produk tab click in each brand's flow. It screencaptures, then scans a vertical line at the Iklan Dilihat column (logical x=461) from screen y=400 to y=1800, collecting every white run (`R,G,B > 248`). It then looks for the **structural pattern of two consecutive long white runs** (each ≥100 screen px = ≥50 logical) separated by a short non-white gap (20–80 screen px) — that's row 1 + row 2 card interiors with the inter-row gap between them. The top of the first matching run = actual row 1 top. Offset = `actual_top - EXPECTED_CARD_TOP_Y` (= 517). The offset is threaded into `is_card_selected` (via pre-adjusted card positions), `select_date_filter`, and `take_screenshot` so all clicks/screenshots track the actual layout per brand.
+`detect_y_offset()` is called after `scroll_to_performa()` and the Semua Iklan Produk tab click in each brand's flow. It screencaptures, then scans a vertical line at the Tayangan column (logical x≈390, `METRIC_CARDS["Tayangan"][0]`) from screen y=400 to y=1800, collecting every white run (`R,G,B > 248`). It then looks for the **structural pattern of two consecutive long white runs** (each ≥100 screen px = ≥50 logical) separated by a short non-white gap (20–80 screen px) — that's row 1 + row 2 card interiors with the inter-row gap between them. The top of the first matching run = actual row 1 top. Offset = `actual_top - EXPECTED_CARD_TOP_Y` (= 517). The offset is threaded into `is_card_selected` (via pre-adjusted card positions), `select_date_filter`, and `take_screenshot` so all clicks/screenshots track the actual layout per brand.
+
+**KNOWN ISSUE (2026-06-11):** after the card redesign, `detect_y_offset` no longer matches the two-run pattern and logs *"Could not detect card position, assuming offset=0"*. With the freshly-measured card grid, offset=0 is correct for brands with full banner content above Performa (verified on BR), but brands with **less** content above (ALUN-M, TH.KSB-M) that historically needed a nonzero offset may capture wrong. `EXPECTED_CARD_TOP_Y` (517) is also now slightly stale vs the measured row-1 card top (~471). Re-tune the detection / `EXPECTED_CARD_TOP_Y` for the new layout if those brands come out clipped.
 
 Why it's needed: brands like ALUN-M and TH.KSB-M have less promo/banner content above the Performa section, so the fixed `pyautogui.scroll(-7, -8, -3)` lands the cards ~80–100 logical px higher than for brands with full banners. Without the offset, the bot would click row-1 coords and hit row-2 cards (or vice versa) and the crop would clip the cards while leaking "Semua Daftar Iklan" at the bottom.
 
@@ -139,4 +145,4 @@ Why two-run pattern (added 2026-05-11): the old single-run scan false-matched pl
 - The bot's fixed-tick scroll (`scroll_to_performa`) lands at different positions across brands. The auto-detect y-offset compensates; don't assume row-1 cards are always at calibrated y.
 - **Iklan Shopee tab is sticky across sessions.** Even with the right URL, Shopee opens whichever tab was last used (Iklan Toko, Iklan Banner, etc.). The bot always clicks `SEMUA_IKLAN_PRODUK_TAB` after scrolling to defend against this — do NOT remove that step.
 - **When verifying calibrated coords, never use osascript Yes/No dialogs.** The dialog appears centered on screen and can physically cover the cursor at the hovered position, producing false-negative "No" answers even when the coord is correct. Use `pyautogui.moveTo` + `screencapture` + read the PNG to check where the cursor actually landed.
-- **Wrong date filter clicks ≠ stale date filter calibration.** When a click lands wrong, the usual cause is `detect_y_offset` returning a bad value (or the bot being on the wrong tab), which shifts every downstream click. Check the bot's stdout for the printed offset before re-calibrating the date filter coords.
+- **Wrong date filter clicks are usually `detect_y_offset` — but not always.** The usual cause is `detect_y_offset` returning a bad value (or the bot being on the wrong tab), which shifts every downstream click. Check the bot's stdout for the printed offset first. **EXCEPTION (2026-06-11):** after a layout shift, the date coords were genuinely stale — `DATE_FILTER_DROPDOWN (1103, 484)` landed ON the Persentase Klik card, so opening the dropdown toggled a metric and the date never changed. **Tell-tale of stale date coords:** the same extra metrics keep re-appearing in the final screenshot even after the bot logs deselecting them (the date-filter clicks fire AFTER metric-setting and re-toggle the cards underneath), and `detect_y_offset` printed offset=0. Fix with `_calibrate_date_full.py`; the new `DATE_FILTER_DROPDOWN` y must be ABOVE the card row (cards start ~y471).

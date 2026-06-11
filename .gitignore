@@ -1,5 +1,7 @@
 __pycache__/
 screenshots/
+logs/
+mouse_positions.txt
 ref_images/debug_*
 screen_capture.png
 *.pyc
