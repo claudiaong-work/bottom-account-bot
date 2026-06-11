@@ -29,9 +29,12 @@ IKLAN_SHOPEE_MENU = (80, 739)
 
 # Iklan Shopee page (positions after scrolling down)
 SEMUA_IKLAN_PRODUK_TAB = (280, 430)
-DATE_FILTER_DROPDOWN = (1110, 432)
-FILTER_1BULAN = (664, 575)
-FILTER_3BULAN = (664, 605)
+# Calibrated to the midpoint of per-brand button positions (the date button/dropdown
+# sits ~20px lower on some brands due to a vertical shift detect_y_offset doesn't catch).
+# DATE_FILTER_DROPDOWN clicks the button CENTER (tall target) for tolerance.
+DATE_FILTER_DROPDOWN = (1110, 456)
+FILTER_1BULAN = (662, 585)
+FILTER_3BULAN = (662, 616)
 
 # Metric cards (4 per row, evenly spaced)
 # Row 1 (y=564): Tayangan, Produk Terjual, Jumlah Klik, Penjualan dari Iklan
