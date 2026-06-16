@@ -29,12 +29,12 @@ IKLAN_SHOPEE_MENU = (80, 739)
 
 # Iklan Shopee page (positions after scrolling down)
 SEMUA_IKLAN_PRODUK_TAB = (280, 430)
-# Calibrated to the midpoint of per-brand button positions (the date button/dropdown
-# sits ~20px lower on some brands due to a vertical shift detect_y_offset doesn't catch).
-# DATE_FILTER_DROPDOWN clicks the button CENTER (tall target) for tolerance.
-DATE_FILTER_DROPDOWN = (1110, 456)
-FILTER_1BULAN = (662, 585)
-FILTER_3BULAN = (662, 616)
+# Reference (MON-M, offset 0) date coords; the per-brand y_offset from detect_y_offset
+# is added in select_date_filter so they track each brand's vertical shift.
+# Button center y=446 (measured); option rows ~128/~160 px below the button center.
+DATE_FILTER_DROPDOWN = (1110, 446)
+FILTER_1BULAN = (662, 574)
+FILTER_3BULAN = (662, 606)
 
 # Metric cards (4 per row, evenly spaced)
 # Row 1 (y=564): Tayangan, Produk Terjual, Jumlah Klik, Penjualan dari Iklan
@@ -61,8 +61,8 @@ NAMA_TOKO_DROPDOWN = (386, 292)
 USERNAME_TOKO_OPTION = (397, 368)
 
 # Screenshot crop region (pyautogui coords)
-CROP_TOP_LEFT = (205, 458)
-CROP_BOTTOM_RIGHT = (1621, 1000)
+CROP_TOP_LEFT = (209, 413)
+CROP_BOTTOM_RIGHT = (1616, 963)
 
 # Top-right account menu
 ACCOUNT_BUTTON = (1645, 199)
@@ -324,51 +324,63 @@ def scroll_to_performa():
     time.sleep(2)
 
 
-# Calibrated row-1 card top edge (logical y). Used as anchor for auto-detect.
-EXPECTED_CARD_TOP_Y = 517
+# Calibrated row-1 card top edge (logical y) on the reference brand (MON-M, offset 0).
+# Used as anchor for auto-detect. Measured 2026-06-16 from a live full screencapture.
+EXPECTED_CARD_TOP_Y = 471
 
 
 def detect_y_offset():
     """Scan for the actual top of row 1 cards and return offset from calibrated.
-    Positive = page scrolled less than calibrated (cards lower); negative = more (cards higher).
+    Positive = cards lower than reference; negative = higher.
 
-    Requires the structural pattern of TWO long white runs (row 1 and row 2 card interiors)
-    separated by a short non-white gap (the gap between rows). Plain white space above the
-    Performa section produces only one run and is rejected.
+    Robust detection (rewritten 2026-06-16): the two metric-card rows each show a tall
+    (~164 screen px) white interior, and their tops are exactly ~200 screen px apart
+    (the 100-logical row pitch). We scan a CLEAN white column inside the cards — the
+    RIGHT portion of the Tayangan card, past the name/value text which broke the old
+    scan at the card center — collect long white runs, and find the pair separated by
+    the row pitch. The first run's top = row-1 card top. Whitespace above the cards has
+    no pitch-matched partner, so it can't false-match (the old -217 bug).
     """
     tmp_path = os.path.join(SCREENSHOT_DIR, "_tmp_offset.png")
     subprocess.run(["screencapture", "-x", tmp_path])
     from PIL import Image
     img = Image.open(tmp_path)
     _, height = img.size
-    x_screen = METRIC_CARDS["Tayangan"][0] * 2
 
-    runs = []
-    in_white = False
-    white_start = None
-    for y in range(400, min(1800, height)):
-        r, g, b = img.getpixel((x_screen, y))[:3]
-        is_white = r > 248 and g > 248 and b > 248
-        if is_white and not in_white:
-            in_white = True
-            white_start = y
-        elif not is_white and in_white:
-            runs.append((white_start, y, y - white_start))
-            in_white = False
+    # Try a few clean columns in the Tayangan card's white right portion (logical x).
+    for x_logical in (500, 480, 520, 460):
+        x_screen = x_logical * 2
+        runs = []
+        in_white = False
+        white_start = None
+        for y in range(400, min(1800, height)):
+            r, g, b = img.getpixel((x_screen, y))[:3]
+            is_white = r > 248 and g > 248 and b > 248
+            if is_white and not in_white:
+                in_white = True
+                white_start = y
+            elif not is_white and in_white:
+                runs.append((white_start, y, y - white_start))
+                in_white = False
+        if in_white:
+            runs.append((white_start, min(1800, height), min(1800, height) - white_start))
+
+        # Card interiors are ~164 screen px tall; row1/row2 tops are ~200 screen px apart.
+        longs = [(s, e, l) for s, e, l in runs if l >= 120]
+        for i in range(len(longs)):
+            for j in range(i + 1, len(longs)):
+                pitch = longs[j][0] - longs[i][0]
+                if 180 <= pitch <= 220 and 130 <= longs[i][2] <= 200 and 130 <= longs[j][2] <= 200:
+                    actual_top_logical = longs[i][0] // 2
+                    offset = actual_top_logical - EXPECTED_CARD_TOP_Y
+                    if abs(offset) > 120:  # implausible — refuse rather than cascade
+                        break
+                    os.remove(tmp_path)
+                    print(f"    Card top detected at logical y={actual_top_logical} "
+                          f"(offset {offset:+d}, x={x_logical})")
+                    return offset
+
     os.remove(tmp_path)
-
-    # Look for two consecutive long white runs (≥100 screen px = ≥50 logical) with a
-    # short gap between them (20–80 screen px) — the row1/row2 card pattern.
-    for i in range(len(runs) - 1):
-        s1, e1, l1 = runs[i]
-        s2, e2, l2 = runs[i + 1]
-        gap = s2 - e1
-        if l1 >= 100 and l2 >= 100 and 20 <= gap <= 80:
-            actual_top_logical = s1 // 2
-            offset = actual_top_logical - EXPECTED_CARD_TOP_Y
-            print(f"    Card top detected at logical y={actual_top_logical} (offset {offset:+d})")
-            return offset
-
     print("    Could not detect card position, assuming offset=0")
     return 0
 
