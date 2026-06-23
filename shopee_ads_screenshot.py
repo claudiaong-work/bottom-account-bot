@@ -21,8 +21,8 @@ pyautogui.PAUSE = 0.3
 
 # --- Coordinate map (pyautogui coords for 1710x1112 screen) ---
 # Pilih Toko page
-SEARCH_BOX = (498, 296)
-FIRST_DETAIL_LINK = (1222, 507)
+SEARCH_BOX = (488, 328)
+FIRST_DETAIL_LINK = (1216, 535)
 
 # Shop dashboard - sidebar
 IKLAN_SHOPEE_MENU = (80, 739)
@@ -57,8 +57,8 @@ DESIRED_SELECTED = {"Pengeluaran", "ROAS"}
 
 
 # Search filter dropdown
-NAMA_TOKO_DROPDOWN = (386, 292)
-USERNAME_TOKO_OPTION = (397, 368)
+NAMA_TOKO_DROPDOWN = (386, 322)
+USERNAME_TOKO_OPTION = (394, 401)
 
 # Screenshot crop region (pyautogui coords)
 CROP_TOP_LEFT = (209, 413)
