@@ -102,8 +102,10 @@ Brand names with dots (e.g., `TH.KSB-M`) are sanitized to underscores in Slides 
 - **Recipients:** `tfbi@ahacommerce.net`, `claudia.ong@ahacommerce.net`
 - **Login reminder:** sent before bot runs, includes brand list from Google Sheet
 - **Success report:** sent after the FULL run finishes (screenshots + Slides insertion). Must list, per brand, whether the screenshot was captured and whether it was inserted into both decks. Surface any failures explicitly so the user knows which brands to redo manually.
-- **Auth:** Gmail API via `token_gmail.pickle` (separate from Slides OAuth), uses `gmail.send` scope
-- **Sender:** `claudia.ong@ahacommerce.net` (via OAuth)
+- **Auth (changed 2026-06-26):** Gmail API via **service-account domain-wide delegation** — `send_email.py` loads `service_account.json` (same key used for Sheets), requests the `gmail.send` scope, and impersonates the sender with `.with_subject(EMAIL_SENDER)`. No more OAuth browser flow or `token_gmail.pickle` for email.
+  - **DWD authorization (one-time, admin):** the service account's client ID `100244324578592545717` must be authorized in the Workspace Admin Console (Security → API Controls → Domain-wide Delegation) for scope `https://www.googleapis.com/auth/gmail.send`. Without it, sends fail with `unauthorized_client`.
+  - The impersonated mailbox must be a **real Workspace account** in `ahacommerce.net` — DWD can't impersonate a non-existent user.
+- **Sender:** `bot@ahacommerce.net`, display name **AHAbot™** (set via `EMAIL_SENDER` / `EMAIL_SENDER_NAME` in `config.py`). The From header UTF-8-encodes the ™ (`formataddr` + `Header`), so it transmits as `=?utf-8?b?...?=` and decodes back to AHAbot™ in mail clients.
 
 ## Coordinates
 

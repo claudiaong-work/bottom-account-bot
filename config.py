@@ -9,7 +9,9 @@ MEETING_SLIDES_ID = MEETING_SLIDES_IDS[0]  # back-compat for any old refs
 SCREENSHOT_DIR = "screenshots"
 
 # Email notification
-EMAIL_RECIPIENTS = ["tfbi@ahacommerce.net", "claudia.ong@ahacommerce.net"]
+EMAIL_SENDER = "bot@ahacommerce.net"  # impersonated via service-account domain-wide delegation
+EMAIL_SENDER_NAME = "AHAbot™"  # display name shown on the From line
+EMAIL_RECIPIENTS = ["tfbi@ahacommerce.net"]
 
 # Timing configs (seconds) - adjust if Shopee is slow
 PAGE_LOAD_WAIT = 3

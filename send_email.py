@@ -1,48 +1,39 @@
 import os
-import pickle
 import base64
 from email.mime.text import MIMEText
-from google.auth.transport.requests import Request
-from google_auth_oauthlib.flow import InstalledAppFlow
+from email.header import Header
+from email.utils import formataddr
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
-from config import EMAIL_RECIPIENTS
+from config import EMAIL_SENDER, EMAIL_SENDER_NAME, EMAIL_RECIPIENTS
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-TOKEN_FILE = os.path.join(BASE_DIR, "token_gmail.pickle")
-CREDS_FILE = os.path.join(BASE_DIR, "credentials.json")
+SERVICE_ACCOUNT_FILE = os.path.join(BASE_DIR, "service_account.json")
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
 
 def get_gmail_service():
-    creds = None
-    if os.path.exists(TOKEN_FILE):
-        with open(TOKEN_FILE, "rb") as f:
-            creds = pickle.load(f)
-
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDS_FILE, SCOPES)
-            creds = flow.run_local_server(port=0)
-
-        with open(TOKEN_FILE, "wb") as f:
-            pickle.dump(creds, f)
-
+    # Domain-wide delegation: the service account impersonates EMAIL_SENDER.
+    # Requires the SA's client ID to be authorized for gmail.send in the
+    # Workspace Admin Console (Security > API Controls > Domain-wide Delegation).
+    creds = service_account.Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE, scopes=SCOPES
+    ).with_subject(EMAIL_SENDER)
     return build("gmail", "v1", credentials=creds)
 
 
 def send_email(subject, body):
     service = get_gmail_service()
     message = MIMEText(body)
+    message["from"] = formataddr((str(Header(EMAIL_SENDER_NAME, "utf-8")), EMAIL_SENDER))
     message["to"] = ", ".join(EMAIL_RECIPIENTS)
     message["subject"] = subject
     raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
     service.users().messages().send(
         userId="me", body={"raw": raw}
     ).execute()
-    print(f"  Email sent to {', '.join(EMAIL_RECIPIENTS)}")
+    print(f"  Email sent from {EMAIL_SENDER} to {', '.join(EMAIL_RECIPIENTS)}")
 
 
 def send_login_reminder(brands):
