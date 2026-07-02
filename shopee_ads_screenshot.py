@@ -134,6 +134,12 @@ def take_screenshot(brand_akun, filter_name, y_offset=0):
     timestamp = datetime.now().strftime("%Y%m%d")
     filename = f"{brand_akun}_{filter_name}_{timestamp}.png"
     filepath = os.path.join(SCREENSHOT_DIR, filename)
+    # Park the pointer at a safe neutral spot (well above the cards, far from the
+    # bottom screen edge) so the macOS auto-hide Dock doesn't slide up into the crop.
+    # Some brands' flows leave the cursor near the bottom edge, which triggered the
+    # Dock to appear in the captured image (seen on TAN-M). The 1.5s sleep below gives
+    # the Dock time to retract before the screencapture.
+    pyautogui.moveTo(855, 400)
     time.sleep(1.5)
     tmp_path = os.path.join(SCREENSHOT_DIR, "_tmp_full.png")
     subprocess.run(["screencapture", "-x", tmp_path])
@@ -261,7 +267,11 @@ def click_iklan_shopee(akun):
     pyautogui.typewrite(f"https://{domain}/portal/marketing/pas/index", interval=0.01)
     time.sleep(0.3)
     pyautogui.press("enter")
-    time.sleep(PAGE_LOAD_WAIT + 7)
+    # Wait long enough for the page to load AND leave a generous ~15s window for the
+    # user to manually close the "Bonus Eksklusif" popup (its light backdrop isn't
+    # caught by is_popup_present, so it must be dismissed by hand). Mouse stays still
+    # during this sleep, so the user's X-click won't fight the bot.
+    time.sleep(PAGE_LOAD_WAIT + 15)
 
 
 def is_popup_present():
